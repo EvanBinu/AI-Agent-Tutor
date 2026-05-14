@@ -1,104 +1,130 @@
-import os
-
-os.environ["OTEL_SDK_DISABLED"] = "true"
-os.environ["LITELLM_LOCAL_MODEL_COST_MAP"] = "True"
-
 import streamlit as st
-from crewai import Agent, Task, Crew, Process, LLM
-from dotenv import load_dotenv
+from crewai import Crew, Process
 
-# Load environment variables
-load_dotenv()
+from agents import (
+    professor,
+    tutor,
+    question_generator
+)
 
-# Configure page
+from tasks import create_tasks
+
+# =========================
+# PAGE CONFIG
+# =========================
+
 st.set_page_config(
     page_title="AI Academic Assistant",
     page_icon="📘",
     layout="wide"
 )
 
+# =========================
+# CUSTOM CSS
+# =========================
+
+st.markdown("""
+<style>
+
+.main {
+    background-color: #0E1117;
+}
+
+h1 {
+    color: #FFFFFF;
+    text-align: center;
+}
+
+.stButton > button {
+    width: 100%;
+    border-radius: 10px;
+    height: 3em;
+    font-size: 18px;
+}
+
+.agent-box {
+    padding: 20px;
+    border-radius: 10px;
+    background-color: #1E1E1E;
+    margin-bottom: 20px;
+}
+
+</style>
+""", unsafe_allow_html=True)
+
+# =========================
+# HEADER
+# =========================
+
 st.title("📘 AI Academic Assistant Team")
 
-# Topic input
-topic = st.text_input("Enter a topic")
+st.markdown("""
+This AI system uses multiple collaborative agents:
 
-# Generate button
+- 👨‍🏫 Professor Agent
+- 🧑‍🎓 Tutor Agent
+- ❓ Question Generator Agent
+
+Enter any academic topic to begin learning.
+""")
+
+# =========================
+# INPUT
+# =========================
+
+topic = st.text_input(
+    "Enter Topic",
+    placeholder="Example: Operating Systems"
+)
+
+# =========================
+# BUTTON
+# =========================
+
 if st.button("Generate Learning Content"):
 
-    # Configure LLM
-    llm = LLM(
-        model="groq/llama-3.3-70b-versatile",
-        api_key=os.getenv("GROQ_API_KEY")
-    )
+    if topic.strip() == "":
+        st.warning("Please enter a topic.")
+        st.stop()
 
-    # Professor Agent
-    professor = Agent(
-        role="Professor",
-        goal="Explain concepts in depth",
-        backstory="Experienced university professor",
-        verbose=False,
-        llm=llm
-    )
+    # Loading animation
+    with st.spinner("AI Agents are collaborating..."):
 
-    # Tutor Agent
-    tutor = Agent(
-        role="Tutor",
-        goal="Simplify concepts",
-        backstory="Friendly tutor using examples",
-        verbose=False,
-        llm=llm
-    )
+        # Create tasks
+        tasks = create_tasks(topic)
 
-    # Question Generator
-    question_generator = Agent(
-        role="Question Generator",
-        goal="Generate practice questions",
-        backstory="Academic evaluator",
-        verbose=False,
-        llm=llm
-    )
+        # Create crew
+        crew = Crew(
+            agents=[
+                professor,
+                tutor,
+                question_generator
+            ],
+            tasks=tasks,
+            process=Process.sequential,
+            verbose=False
+        )
 
-    # Tasks
-    professor_task = Task(
-        description=f"Explain {topic} in detail.",
-        expected_output="Detailed explanation",
-        agent=professor
-    )
+        # Execute crew
+        crew.kickoff()
 
-    tutor_task = Task(
-        description=f"Simplify the topic {topic} with examples.",
-        expected_output="Simplified explanation",
-        agent=tutor
-    )
-
-    question_task = Task(
-        description=f"Generate 5 MCQs for {topic}.",
-        expected_output="Practice questions",
-        agent=question_generator
-    )
-
-    # Crew
-    crew = Crew(
-        agents=[
-            professor,
-            tutor,
-            question_generator
-        ],
-        tasks=[
-            professor_task,
-            tutor_task,
-            question_task
-        ],
-        process=Process.sequential,
-        verbose=False
-    )
-
-    # Loading spinner
-    with st.spinner("Agents are collaborating..."):
-
-        result = crew.kickoff()
-
-    # Output
+    # Success message
     st.success("Content Generated Successfully!")
 
-    st.markdown(result)
+    # =========================
+    # DISPLAY INDIVIDUAL OUTPUTS
+    # =========================
+
+    st.markdown("---")
+
+    # Professor Output
+    with st.expander("👨‍🏫 Professor Agent", expanded=True):
+        st.markdown(tasks[0].output.raw)
+
+    # Tutor Output
+    with st.expander("🧑‍🎓 Tutor Agent", expanded=False):
+        st.markdown(tasks[1].output.raw)
+
+    # Question Generator Output
+    with st.expander("❓ Question Generator Agent", expanded=False):
+        st.markdown(tasks[2].output.raw)
