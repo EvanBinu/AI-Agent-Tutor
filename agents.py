@@ -36,3 +36,14 @@ question_generator = Agent(
     verbose=False,
     llm=llm
 )
+# Evaluator Agent
+evaluator = Agent(
+    role="Evaluator",
+    goal="Evaluate student answers and provide feedback",
+    backstory=(
+        "Experienced academic evaluator "
+        "who checks answers and gives scores."
+    ),
+    verbose=False,
+    llm=llm
+)
