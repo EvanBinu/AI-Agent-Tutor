@@ -1,0 +1,66 @@
+# Virtual Environment
+venv/
+.env/
+
+# Python Cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+
+# VS Code
+.vscode/
+
+# PyCharm
+.idea/
+
+# Streamlit Cache
+.streamlit/
+
+# CrewAI / Logs
+logs/
+*.log
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# Build Files
+build/
+dist/
+*.egg-info/
+
+# Environment Variables
+.env
+
+# SQLite Database
+*.db
+
+# Temporary Files
+temp/
+tmp/
+
+# Coverage Reports
+.coverage
+htmlcov/
+
+# Python Testing
+.pytest_cache/
+
+# MyPy
+.mypy_cache/
+
+# Ruff
+.ruff_cache/
+
+# Node Modules (if frontend added later)
+node_modules/
+
+# Mac Files
+.AppleDouble
+.LSOverride
+
+# Windows Files
+desktop.ini
