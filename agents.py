@@ -47,3 +47,12 @@ evaluator = Agent(
     verbose=False,
     llm=llm
 )
+supervisor = Agent(
+    role="Supervisor",
+    goal="Coordinate all educational agents",
+    backstory=(
+        "AI supervisor managing educational workflows."
+    ),
+    verbose=False,
+    llm=llm
+)
