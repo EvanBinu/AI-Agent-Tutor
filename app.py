@@ -1,6 +1,6 @@
 import streamlit as st
 from crewai import Crew, Process, Task
-
+import json
 # =========================
 # IMPORTS
 # =========================
@@ -226,39 +226,69 @@ Example:
 
         with st.spinner("Evaluator Agent is checking answers..."):
 
+# =========================
+# EVALUATION TASK
+# =========================
+
             evaluation_task = Task(
                 description=f"""
-Evaluate the student's answers.
+            Evaluate the student's answers.
 
-QUESTIONS:
-{st.session_state.questions}
+            QUESTIONS:
+            {st.session_state.questions}
 
-STUDENT ANSWERS:
-{student_answers}
+            STUDENT ANSWERS:
+            {student_answers}
 
-STRICT RULES:
+            Return ONLY valid JSON.
 
-- There are 3 MCQs
-- Each correct answer = 1 mark
-- Wrong answer = 0
-- No partial marks
+            FORMAT:
 
-CALCULATE:
-Percentage = (correct_answers / 3) * 100
+            {{
+                "score": 0,
+                "percentage": 0,
+                "correct_answers": [
+                    {{
+                        "question": "Question text",
+                        "correct_answer": "A"
+                    }}
+                ],
+                "wrong_answers": [
+                    {{
+                        "question": "Question text",
+                        "student_answer": "B",
+                        "correct_answer": "C"
+                    }}
+                ],
+                "feedback": "Short feedback",
+                "suggestions": [
+                    "Suggestion 1",
+                    "Suggestion 2"
+                ]
+            }}
 
-Provide:
-1. Correct answers
-2. Wrong answers
-3. Final score
-4. Percentage
-5. Feedback
-6. Improvement suggestions
+            RULES:
+            - No markdown
+            - No explanations outside JSON
+            - No extra text
+            - Valid JSON only
 
-DO NOT estimate subjectively.
-""",
-                expected_output="Detailed evaluation report.",
+            SCORING RULES:
+            - There are 3 MCQs
+            - Each correct answer = 1 mark
+            - Wrong answer = 0
+            - No partial marks
+
+            CALCULATE:
+            percentage = (score / 3) * 100
+            """,
+                expected_output="Valid JSON evaluation report.",
                 agent=evaluator
             )
+
+            # =========================
+            # CREATE EVALUATION CREW
+            # =========================
 
             evaluation_crew = Crew(
                 agents=[evaluator],
@@ -267,33 +297,54 @@ DO NOT estimate subjectively.
                 verbose=False
             )
 
+            # =========================
+            # RUN EVALUATION
+            # =========================
+
             evaluation_result = evaluation_crew.kickoff()
 
             # =========================
-            # STORE RESULTS
+            # PARSE JSON RESPONSE
             # =========================
 
-            st.session_state.evaluation_result = evaluation_result
+            try:
 
-            # VERY SIMPLE SCORE DETECTION
-            # (temporary implementation)
+                evaluation_data = json.loads(
+                    str(evaluation_result)
+                )
 
-            evaluation_text = str(evaluation_result)
+            except Exception as e:
 
-            score = 0
+                st.error("Invalid JSON returned by Evaluator Agent")
 
-            if "Final score: 3" in evaluation_text:
-                score = 3
-            elif "Final score: 2" in evaluation_text:
-                score = 2
-            elif "Final score: 1" in evaluation_text:
-                score = 1
-            else:
-                score = 0
+                st.code(str(e))
 
-            percentage = (score / 3) * 100
+                st.stop()
+
+            # =========================
+            # EXTRACT STRUCTURED DATA
+            # =========================
+
+            score = evaluation_data["score"]
+
+            percentage = evaluation_data["percentage"]
+
+            correct_answers = evaluation_data["correct_answers"]
+
+            wrong_answers = evaluation_data["wrong_answers"]
+
+            feedback = evaluation_data["feedback"]
+
+            suggestions = evaluation_data["suggestions"]
+
+            # =========================
+            # STORE SESSION DATA
+            # =========================
+
+            st.session_state.evaluation_result = evaluation_data
 
             st.session_state.score = score
+
             st.session_state.percentage = percentage
 
             # =========================
@@ -305,14 +356,20 @@ DO NOT estimate subjectively.
                 topic,
                 score,
                 percentage,
-                feedback
+                correct_answers,
+                wrong_answers,
+                feedback,
+                suggestions
             )
-            VALUES (?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """, (
                 topic,
                 score,
                 percentage,
-                evaluation_text
+                json.dumps(correct_answers),
+                json.dumps(wrong_answers),
+                feedback,
+                json.dumps(suggestions)
             ))
 
             conn.commit()
@@ -339,11 +396,22 @@ DO NOT estimate subjectively.
                 )
 
                 # A2A message
-                send_message(
-                    "Evaluator",
-                    "Tutor",
-                    f"Student is weak in {weak_topic}"
+                existing_messages = shared_memory["agent_messages"]
+
+                message_content = f"Student is weak in {weak_topic}"
+
+                already_exists = any(
+                    msg["content"] == message_content
+                    for msg in existing_messages
                 )
+
+                if not already_exists:
+
+                    send_message(
+                        "Evaluator",
+                        "Tutor",
+                        message_content
+                    )
 
                 # Save agent message
                 cursor.execute("""
@@ -373,7 +441,83 @@ if st.session_state.evaluation_result:
 
     st.markdown("## 📊 Evaluation Report")
 
-    st.markdown(st.session_state.evaluation_result)
+    evaluation = st.session_state.evaluation_result
+
+    # =========================
+    # EVALUATION SUMMARY
+    # =========================
+
+    st.markdown("## 📊 Evaluation Summary")
+
+    # Score
+    st.markdown(f"""
+    ### ✅ Score
+
+    {evaluation['score']}/3
+    """)
+
+    # Percentage
+    st.markdown(f"""
+    ### 📈 Percentage
+
+    {evaluation['percentage']}%
+    """)
+
+    # =========================
+    # CORRECT ANSWERS
+    # =========================
+
+    st.markdown("## ✔ Correct Answers")
+
+    for item in evaluation["correct_answers"]:
+
+        st.success(f"""
+    Question:
+    {item['question']}
+
+    Correct Answer:
+    {item['correct_answer']}
+    """)
+
+    # =========================
+    # WRONG ANSWERS
+    # =========================
+
+    st.markdown("## ❌ Wrong Answers")
+
+    for item in evaluation["wrong_answers"]:
+
+        st.error(f"""
+    Question:
+    {item['question']}
+
+    Your Answer:
+    {item['student_answer']}
+
+    Correct Answer:
+    {item['correct_answer']}
+    """)
+
+    # =========================
+    # FEEDBACK
+    # =========================
+
+    st.markdown("## 💬 Feedback")
+
+    st.info(evaluation["feedback"])
+
+    # =========================
+    # SUGGESTIONS
+    # =========================
+
+    st.markdown("## 🚀 Suggestions")
+
+    for item in evaluation["suggestions"]:
+
+        st.markdown(f"- {item}")
+
+    for item in evaluation["suggestions"]:
+        st.markdown(f"- {item}")
 
     st.markdown(f"""
 ### 📈 Performance Summary

@@ -32,7 +32,10 @@ CREATE TABLE IF NOT EXISTS results (
     topic TEXT,
     score INTEGER,
     percentage REAL,
+    correct_answers TEXT,
+    wrong_answers TEXT,
     feedback TEXT,
+    suggestions TEXT,
     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
 )
 """)
@@ -77,7 +80,7 @@ CREATE TABLE IF NOT EXISTS learning_history (
 """)
 
 # =========================
-# COMMIT
+# COMMIT CHANGES
 # =========================
 
 conn.commit()
